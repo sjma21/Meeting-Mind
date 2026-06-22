@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   Loader2,
@@ -13,6 +13,17 @@ import {
 import { useMeetingStatus } from "../hooks/useMeetingStatus";
 import * as api from "../lib/api";
 import type { Meeting } from "../types";
+
+const TEST_TRANSCRIPT = `Manager: Thanks for joining. Let's review your progress on the auth refactor.
+Employee: I finished the JWT middleware and added refresh token rotation. Still working on the login page error states.
+Manager: Good. Can you also add unit tests for the token validation module by end of week?
+Employee: Yes, I'll have those done by Friday. I also need to update the API docs for the new endpoints.
+Manager: Perfect. Let's sync again next Monday.`;
+
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -163,7 +174,10 @@ export default function MeetingLivePage() {
   const [removing, setRemoving] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [retryingAnalysis, setRetryingAnalysis] = useState(false);
+  const [injecting, setInjecting] = useState(false);
   const [readyTaskCount, setReadyTaskCount] = useState<number | undefined>();
+  const [processingElapsed, setProcessingElapsed] = useState(0);
+  const processingSince = useRef<number | null>(null);
 
   const { status, botStatus, duration, isPolling } = useMeetingStatus(
     id,
@@ -233,6 +247,50 @@ export default function MeetingLivePage() {
   const isLive = currentStatus === "bot_joining" || currentStatus === "recording";
   const showProcessingReady = currentStatus === "processing" && readyTaskCount !== undefined;
 
+  useEffect(() => {
+    if (currentStatus === "processing") {
+      const startedAt = meeting?.ended_at
+        ? new Date(meeting.ended_at).getTime()
+        : processingSince.current ?? Date.now();
+      processingSince.current = startedAt;
+    } else {
+      processingSince.current = null;
+    }
+  }, [currentStatus, meeting?.ended_at]);
+
+  useEffect(() => {
+    if (currentStatus !== "processing") {
+      setProcessingElapsed(0);
+      return;
+    }
+    const tick = () => {
+      if (processingSince.current !== null) {
+        setProcessingElapsed(Date.now() - processingSince.current);
+      }
+    };
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => clearInterval(t);
+  }, [currentStatus]);
+
+  const showInjectTestTranscript =
+    isLocalhost &&
+    (currentStatus === "failed" ||
+      (currentStatus === "processing" && processingElapsed > 2 * 60 * 1000));
+
+  async function handleInjectTestTranscript() {
+    if (!id || injecting) return;
+    setInjecting(true);
+    try {
+      await api.injectTestTranscript(id, TEST_TRANSCRIPT);
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setInjecting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -300,6 +358,16 @@ export default function MeetingLivePage() {
           <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-between gap-3">
             <p className="text-xs text-gray-400">{meeting.error_message ?? ""}</p>
             <div className="flex gap-2 flex-shrink-0">
+              {showInjectTestTranscript && (
+                <button
+                  onClick={handleInjectTestTranscript}
+                  disabled={injecting}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-60"
+                >
+                  {injecting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Inject Test Transcript
+                </button>
+              )}
               <button
                 onClick={handleRetryAnalysis}
                 disabled={retryingAnalysis}
@@ -317,6 +385,23 @@ export default function MeetingLivePage() {
                 Recover
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Stuck processing — dev test inject */}
+        {currentStatus === "processing" && showInjectTestTranscript && (
+          <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-400">
+              Analysis taking longer than expected?
+            </p>
+            <button
+              onClick={handleInjectTestTranscript}
+              disabled={injecting}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-60"
+            >
+              {injecting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Inject Test Transcript
+            </button>
           </div>
         )}
 

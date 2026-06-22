@@ -146,6 +146,13 @@ export function analyzeMeeting(id: string): Promise<{ status: string }> {
   return request("POST", `/api/meetings/${id}/analyze`);
 }
 
+export function injectTestTranscript(
+  id: string,
+  transcript: string
+): Promise<{ success: boolean }> {
+  return request("POST", `/api/meetings/${id}/inject-transcript`, { transcript });
+}
+
 export function getMeetingReport(id: string): Promise<MeetingReport> {
   return request("GET", `/api/meetings/${id}/report`);
 }
