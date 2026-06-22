@@ -41,10 +41,13 @@ async function finalizeMeeting(
     text = parseTranscript(raw, meeting.participant_names ?? undefined);
     segmentCount = raw.length;
   } catch (err) {
-    // 400 = transcription not configured for this bot (bot was created without a provider).
-    // Save a placeholder so we don't retry on every poll.
+    if (err instanceof Error && err.message === "TRANSCRIPT_PROCESSING") {
+      console.warn(`[Meeting ${meeting.id}] Transcript S3 URL not ready after retries — marking failed`);
+      await supabase.from("meetings").update({ status: "failed" }).eq("id", meeting.id);
+      return { transcript: "", duration: 0 };
+    }
     console.warn(`[Meeting ${meeting.id}] Transcript unavailable:`, err);
-    text = "[No transcript — transcription was not enabled for this meeting]";
+    text = "[No transcript available]";
   }
 
   const startedAt = new Date(meeting.created_at).getTime();
