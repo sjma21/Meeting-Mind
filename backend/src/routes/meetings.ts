@@ -281,6 +281,39 @@ meetings.post("/:id/recover", async (c) => {
   return c.json({ ok: true, botStatus, ...recovered });
 });
 
+// POST /api/meetings/:id/inject-transcript — inject a test transcript for development testing
+meetings.post("/:id/inject-transcript", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+  const body = await c.req.json<{ transcript: string }>();
+
+  if (typeof body.transcript !== "string") {
+    return c.json({ error: "transcript is required" }, 400);
+  }
+
+  const { data: meeting, error } = await supabase
+    .from("meetings")
+    .select("id, user_id")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !meeting) return c.json({ error: "Meeting not found" }, 404);
+
+  const { error: updateErr } = await supabase
+    .from("meetings")
+    .update({ transcript: body.transcript, status: "processing" })
+    .eq("id", id);
+
+  if (updateErr) return c.json({ error: updateErr.message }, 500);
+
+  analyzeMeetingTranscript(id, userId).catch((err) =>
+    console.error(`[Meeting ${id}] Injected transcript analysis error:`, err)
+  );
+
+  return c.json({ success: true });
+});
+
 // POST /api/meetings/:id/analyze — manually trigger / re-trigger Claude analysis
 meetings.post("/:id/analyze", async (c) => {
   const userId = c.get("userId");
