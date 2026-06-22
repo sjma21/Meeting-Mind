@@ -12,6 +12,15 @@ export interface RecallBot {
   id: string;
   status_changes: Array<{ code: string; created_at: string }>;
   meeting_participants?: Array<{ name: string }>;
+  recordings?: Array<{
+    media_shortcuts?: {
+      transcript?: {
+        data?: {
+          download_url: string | null;
+        };
+      };
+    };
+  }>;
 }
 
 export async function createBot(
@@ -27,9 +36,7 @@ export async function createBot(
       recording_config: {
         transcript: {
           provider: {
-            assembly_ai_async_chunked: {
-              language_code: "en",
-            },
+            assembly_ai_async_chunked: {},
           },
         },
       },
@@ -94,6 +101,7 @@ export async function removeBot(
 interface TranscriptWord {
   text: string;
   start_time: number;
+  end_time: number;
 }
 
 interface TranscriptEntry {
@@ -105,13 +113,53 @@ export async function getBotTranscript(
   botId: string,
   recallApiKey: string
 ): Promise<TranscriptEntry[]> {
-  const res = await fetch(`${RECALL_BASE}/bot/${botId}/transcript`, {
-    headers: recallHeaders(recallApiKey),
+  // Step 1: Poll bot data for the S3 download URL (up to 3 attempts, 5s apart)
+  let downloadUrl: string | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 5000));
+
+    const res = await fetch(`${RECALL_BASE}/bot/${botId}`, {
+      headers: recallHeaders(recallApiKey),
+    });
+    if (!res.ok) throw new Error(`getBotTranscript: bot fetch failed ${res.status}`);
+
+    const data = (await res.json()) as RecallBot;
+    downloadUrl =
+      data.recordings?.[0]?.media_shortcuts?.transcript?.data?.download_url ?? null;
+    console.log(`[Recall] getBotTranscript attempt ${attempt + 1}/3 downloadUrl=${downloadUrl}`);
+    if (downloadUrl) break;
+  }
+
+  if (!downloadUrl) throw new Error("TRANSCRIPT_PROCESSING");
+
+  // Step 2: Fetch from S3 — public URL, no auth headers
+  const s3Res = await fetch(downloadUrl);
+  if (!s3Res.ok) throw new Error(`getBotTranscript: S3 fetch failed ${s3Res.status}`);
+
+  return normalizeTranscript(await s3Res.json());
+}
+
+// Handle both array-of-utterances and AssemblyAI { utterances: [...] } formats
+function normalizeTranscript(raw: unknown): TranscriptEntry[] {
+  if (Array.isArray(raw)) {
+    return raw as TranscriptEntry[];
+  }
+
+  const obj = raw as {
+    utterances?: Array<{ speaker: string; text: string; start: number; end: number }>;
+  };
+  if (!obj.utterances || !Array.isArray(obj.utterances)) return [];
+
+  return obj.utterances.map((u) => {
+    const wordTexts = u.text.split(" ");
+    const durationPerWord = (u.end - u.start) / wordTexts.length;
+    const words: TranscriptWord[] = wordTexts.map((text, i) => ({
+      text,
+      start_time: (u.start + i * durationPerWord) / 1000,
+      end_time: (u.start + (i + 1) * durationPerWord) / 1000,
+    }));
+    return { speaker: `Speaker ${u.speaker}`, words };
   });
-
-  if (!res.ok) throw new Error(`getBotTranscript failed: ${res.status}`);
-
-  return res.json() as Promise<TranscriptEntry[]>;
 }
 
 export function parseTranscript(
