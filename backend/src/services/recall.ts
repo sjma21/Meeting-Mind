@@ -24,8 +24,14 @@ export async function createBot(
     body: JSON.stringify({
       meeting_url: meetingUrl,
       bot_name: "MeetingMind",
-      output_transcription_options: {
-        provider: "assembly_ai",
+      recording_config: {
+        transcript: {
+          provider: {
+            assembly_ai_async_chunked: {
+              language_code: "en",
+            },
+          },
+        },
       },
     }),
   });
