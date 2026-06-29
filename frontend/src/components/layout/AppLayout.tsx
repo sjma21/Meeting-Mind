@@ -1,4 +1,4 @@
-import { NavLink, useLocation, Outlet } from "react-router-dom";
+import { NavLink, Link, useLocation, Outlet } from "react-router-dom";
 import {
   Mic,
   LayoutDashboard,
@@ -7,6 +7,7 @@ import {
   Clock,
   Settings,
   LogOut,
+  Home,
 } from "lucide-react";
 import { useSession, useSignOut } from "../../hooks/useAuth";
 
@@ -54,13 +55,17 @@ export default function AppLayout() {
         className="fixed top-0 left-0 h-full bg-white flex flex-col"
         style={{ width: 240, borderRight: "1px solid #e5e7eb", zIndex: 10 }}
       >
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-5 py-5">
+        {/* Brand — clicking the logo returns to landing page */}
+        <Link
+          to="/"
+          className="flex items-center gap-2.5 px-5 py-5 hover:opacity-80 transition-opacity"
+          style={{ textDecoration: "none" }}
+        >
           <div className="flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
             <Mic className="w-4 h-4 text-white" />
           </div>
           <span className="font-semibold text-gray-900 text-base">MeetingMind</span>
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-2 space-y-0.5">
@@ -82,8 +87,16 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        {/* Bottom: user + sign out */}
+        {/* Bottom: home link + user + sign out */}
         <div className="px-3 py-4 border-t border-gray-100">
+          <Link
+            to="/"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors mb-1"
+            style={{ textDecoration: "none" }}
+          >
+            <Home className="w-4 h-4 flex-shrink-0" />
+            Back to Home
+          </Link>
           <div className="flex items-center gap-2 px-3 py-2 mb-1">
             <UserAvatar email={userEmail} />
             <span className="text-xs text-gray-500 truncate flex-1">{userEmail}</span>

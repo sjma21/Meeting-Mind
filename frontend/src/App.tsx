@@ -1,8 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useSession } from "./hooks/useAuth";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AuthPage from "./pages/AuthPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
+import LandingPage from "./pages/LandingPage";
 import DashboardPage from "./pages/DashboardPage";
 import NewMeetingPage from "./pages/NewMeetingPage";
 import RepositoriesPage from "./pages/RepositoriesPage";
@@ -11,17 +11,11 @@ import SettingsPage from "./pages/SettingsPage";
 import MeetingLivePage from "./pages/MeetingLivePage";
 import MeetingReportPage from "./pages/MeetingReportPage";
 
-function RootRedirect() {
-  const { session, loading } = useSession();
-  if (loading) return null;
-  return <Navigate to={session ? "/dashboard" : "/auth"} replace />;
-}
-
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<AuthPage />} />
 
         <Route

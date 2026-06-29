@@ -162,23 +162,55 @@ function normalizeTranscript(raw: unknown): TranscriptEntry[] {
   });
 }
 
+function stripEmoji(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function parseTranscript(
   recallTranscript: TranscriptEntry[],
   participantNames?: { manager?: string; employee?: string }
 ): string {
-  // Build speaker name map: "Speaker 1" → real name
-  const nameMap: Record<string, string> = {};
-  if (participantNames) {
-    if (participantNames.manager) nameMap["Speaker 1"] = participantNames.manager;
-    if (participantNames.employee) nameMap["Speaker 2"] = participantNames.employee;
-  }
+  if (!recallTranscript || recallTranscript.length === 0) return "";
 
+  const manager = participantNames?.manager ?? "Speaker 1";
+  const employee = participantNames?.employee ?? "Speaker 2";
+
+  // Map all speaker key variants Recall.ai may return ("0", "Speaker 0", "1", "Speaker 1")
+  const nameMap: Record<string, string> = {
+    "0": manager,
+    "Speaker 0": manager,
+    "1": employee,
+    "Speaker 1": employee,
+  };
+
+  const SENTENCE_GAP_SECONDS = 1.5;
   const lines: string[] = [];
+
   for (const entry of recallTranscript) {
-    const words = entry.words.map((w) => w.text).join(" ").trim();
-    if (!words) continue;
-    const speaker = nameMap[entry.speaker] ?? entry.speaker;
-    lines.push(`${speaker}: ${words}`);
+    const rawSpeaker = entry.speaker != null ? String(entry.speaker) : "";
+    const speakerDisplay = nameMap[rawSpeaker] ?? (rawSpeaker || manager);
+
+    const words = entry.words;
+    if (!words || words.length === 0) continue;
+
+    let sentenceWords: string[] = [words[0].text];
+    for (let i = 1; i < words.length; i++) {
+      const prev = words[i - 1];
+      const curr = words[i];
+      const gap = curr.start_time - (prev.end_time ?? prev.start_time);
+      if (gap > SENTENCE_GAP_SECONDS) {
+        const sentence = stripEmoji(sentenceWords.join(" "));
+        if (sentence) lines.push(`${speakerDisplay}: ${sentence}`);
+        sentenceWords = [curr.text];
+      } else {
+        sentenceWords.push(curr.text);
+      }
+    }
+    const remaining = stripEmoji(sentenceWords.join(" "));
+    if (remaining) lines.push(`${speakerDisplay}: ${remaining}`);
   }
 
   return lines.join("\n");

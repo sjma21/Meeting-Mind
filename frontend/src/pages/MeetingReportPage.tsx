@@ -307,11 +307,19 @@ function MyTasksTab({
       return (ord[a.priority] ?? 1) - (ord[b.priority] ?? 1);
     });
 
+  const uniqueAssignees = new Set(tasks.map((t) => t.assignee_name).filter(Boolean));
+  const limitedSeparation = tasks.length > 1 && uniqueAssignees.size <= 1;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
         <span className="font-semibold text-gray-800">{mine.length}</span> task{mine.length !== 1 ? "s" : ""} assigned to you
       </p>
+      {limitedSeparation && (
+        <p className="text-xs text-gray-400 italic border border-gray-100 rounded-lg px-3 py-2 bg-gray-50">
+          Note: Speaker separation was limited in this recording. Tasks have been assigned based on conversation context.
+        </p>
+      )}
       {mine.length === 0 ? (
         <div className="text-center py-12 text-gray-400 text-sm">No tasks assigned to you in this meeting.</div>
       ) : (
@@ -463,6 +471,7 @@ function TranscriptTab({
 
           const [speaker, ...rest] = line.split(":");
           const text = rest.join(":").trim();
+          const displaySpeaker = speaker?.trim() || managerName || "Speaker";
 
           return (
             <div
@@ -476,7 +485,7 @@ function TranscriptTab({
                   isManager ? "text-indigo-600" : isEmployee ? "text-gray-500" : "text-gray-700"
                 }`}
               >
-                {speaker}:
+                {displaySpeaker}:
               </span>
               <span className="text-gray-700">{text || line}</span>
               {isHighlighted && (
